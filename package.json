@@ -1,0 +1,28 @@
+{
+  "name": "react-step",
+  "version": "1.0.0",
+  "description": "",
+  "main": ".eslintrc.js",
+  "dependencies": {
+    "babel": "^6.23.0",
+    "babel-cli": "^6.26.0",
+    "eslint-config-alloy": "^1.4.2"
+  },
+  "devDependencies": {
+    "eslint-plugin-react": "^7.12.4"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shitouo/react-step.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/shitouo/react-step/issues"
+  },
+  "homepage": "https://github.com/shitouo/react-step#readme"
+}
