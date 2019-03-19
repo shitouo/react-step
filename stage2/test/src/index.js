@@ -8,17 +8,16 @@ class LikeButton extends React.Component {
     }
 
     render() {
-        if (this.state.liked) {
-            return 'You liked this.';
+        const buttonStyle = {
+            fontSize: '30px'
         }
-
         return (
-            <button onClick={() => this.setState({ liked: true }) } hehe="1">
-              Like
+            <button style={ buttonStyle } className="red" onClick={() => console.log('buttopn') } hehe="1">
+                <span>Like</span>
             </button>
         );
     }
 }
 
 let domContainer = document.querySelector('#container');
-ReactDOM.render(<h1>this is title!</h1>, domContainer);
+ReactDOM.render(<LikeButton />, domContainer);

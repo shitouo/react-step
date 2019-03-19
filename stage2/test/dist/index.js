@@ -2,27 +2,26 @@ import React from '../../src/React.js';
 import ReactDOM from '../../src/ReactDOM.js';
 
 class LikeButton extends React.Component {
-    constructor(props) {
-        super(props);
-        this.state = { liked: false };
-    }
+  constructor(props) {
+    super(props);
+    this.state = {
+      liked: false
+    };
+  }
 
-    render() {
-        if (this.state.liked) {
-            return 'You liked this.';
-        }
+  render() {
+    const buttonStyle = {
+      fontSize: '30px'
+    };
+    return React.createElement("button", {
+      style: buttonStyle,
+      className: "red",
+      onClick: () => console.log('buttopn'),
+      hehe: "1"
+    }, React.createElement("span", null, "Like"));
+  }
 
-        return React.createElement(
-            'button',
-            { onClick: () => this.setState({ liked: true }), hehe: '1' },
-            'Like'
-        );
-    }
 }
 
 let domContainer = document.querySelector('#container');
-ReactDOM.render(React.createElement(
-    'h1',
-    null,
-    'this is title!'
-), domContainer);
+ReactDOM.render(React.createElement(LikeButton, null), domContainer);
