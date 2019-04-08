@@ -14,7 +14,6 @@ class LikeButton extends React.Component {
         return (
             <button style={ buttonStyle } className="red" onClick={() => console.log('buttopn') } hehe="1">
                 <span>Like</span>
-                <div> not Like</div>
             </button>
         );
     }

@@ -1,14 +1,5 @@
-import ReactRoot from './reactRoot.js';
-
 function render(reactElement, container) {
-    // 根据container生成ReactRoot根节点
-    const reactRoot = new ReactRoot(container);
-
-    // 根据reactElement递归生成Fiber tree，并插入到reactRoot中
-    reactRoot.render(reactElement);
-    console.log(reactRoot);
-
-    /* const reactElementType = reactElement.type;
+    const reactElementType = reactElement.type;
     if (typeof reactElementType === 'function') { // class或者function组件
         const Ctor = reactElementType;
         const instance = new Ctor();
@@ -69,11 +60,13 @@ function render(reactElement, container) {
             return container;
         }
         container.appendChild(domElement);
-    } */
+    }
 }
 
 let ReactDom = {
-    render: render
+    render,
+    createRootFromDOMContainer,
+    
 };
 
 export default ReactDom;
