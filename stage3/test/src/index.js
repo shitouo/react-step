@@ -4,7 +4,7 @@ import ReactDOM from '../../src/ReactDOM.js';
 class LikeButton extends React.Component {
     constructor(props) {
         super(props);
-        this.state = { liked: false };
+        this.state = { liked: 'ssdfdsf' };
     }
 
     render() {
@@ -13,7 +13,7 @@ class LikeButton extends React.Component {
         }
         return (
             <button style={ buttonStyle } className="red" onClick={() => console.log('buttopn') } hehe="1">
-                <span>Like</span>
+                <span>{this.state.liked + '1111'}</span>
                 <div> not Like</div>
             </button>
         );
