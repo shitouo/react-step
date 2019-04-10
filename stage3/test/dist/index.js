@@ -12,7 +12,7 @@ class LikeButton extends React.Component {
             fontSize: '30px'
         };
         return React.createElement(
-            'button',
+            'div',
             { style: buttonStyle, className: 'red', onClick: () => console.log('buttopn'), hehe: '1' },
             React.createElement(
                 'span',
@@ -22,7 +22,21 @@ class LikeButton extends React.Component {
             React.createElement(
                 'div',
                 null,
-                ' not Like'
+                React.createElement(
+                    'span',
+                    null,
+                    'not like 1'
+                ),
+                React.createElement(
+                    'span',
+                    null,
+                    'not like 2'
+                ),
+                React.createElement(
+                    'p',
+                    null,
+                    'not like 3'
+                )
             )
         );
     }

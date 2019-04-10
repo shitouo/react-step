@@ -12,10 +12,14 @@ class LikeButton extends React.Component {
             fontSize: '30px'
         }
         return (
-            <button style={ buttonStyle } className="red" onClick={() => console.log('buttopn') } hehe="1">
+            <div style={ buttonStyle } className="red" onClick={() => console.log('buttopn') } hehe="1">
                 <span>{this.state.liked + '1111'}</span>
-                <div> not Like</div>
-            </button>
+                <div>
+                    <span>not like 1</span>
+                    <span>not like 2</span>
+                    <p>not like 3</p>
+                </div>
+            </div>
         );
     }
 }
