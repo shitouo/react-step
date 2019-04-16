@@ -2,9 +2,18 @@
  * React对象
  */
 import { REACT_ELEMENT_TYPE } from './Constant.js';
+import ReactDom from './ReactDom.js';
 
 class Component {
-    // noop
+    setState(partialState) {
+        // 更新当前组件实例的state
+        this.state = {
+            ...this.state,
+            ...partialState
+        };
+        // 以已经存在的Fiber tree为模板，构建？更新？新的Fiber tree
+        ReactDom.enqueueSetState(this);
+    }
 }
 
 const React = {

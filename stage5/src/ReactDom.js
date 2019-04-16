@@ -1,4 +1,5 @@
 import ReactRoot from './reactRoot.js';
+import { enqueueSetState } from './classComponentUpdater.js';
 
 function render(reactElement, container) {
     // 根据container生成ReactRoot根节点
@@ -44,7 +45,8 @@ function commit(isInitial, reactRoot) {
 }
 
 let ReactDom = {
-    render: render
+    render,
+    enqueueSetState
 };
 
 export default ReactDom;
