@@ -20,9 +20,8 @@ const classComponentUpdater = {
         const rootFiber = scheduleWorkToRoot(inst);
         // clone 当前rootFiber
         const newRootFiber = createWorkInProgress(rootFiber);
-        // 构建新的Fiber tree
+        // 构建新的Fiber tree，并完成diff
         newRootFiber.stateNode.render();
-        // diff
     }
 };
 

@@ -5,3 +5,7 @@ export const FIBERTAGS = {
     HostRoot: 3,
     HostComponent: 5,
 };
+
+export const EFFECTTAGS = {
+    Update: 4,
+};
