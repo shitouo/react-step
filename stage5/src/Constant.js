@@ -7,5 +7,7 @@ export const FIBERTAGS = {
 };
 
 export const EFFECTTAGS = {
+    NoEffect: 0,
     Update: 4,
+    Incomplete: 1024,
 };
