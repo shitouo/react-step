@@ -2,6 +2,8 @@
  * fiberNode类
  * 用来生产Fiber节点
  */
+import { EFFECTTAGS } from './Constant.js'
+
 class FiberNode {
     constructor(tag, pendingProps, key, type) {
         // instance
@@ -22,6 +24,14 @@ class FiberNode {
         this.pendingProps = pendingProps;
         this.memorizedProps = null;
         this.memorizedState = null;
+
+        // effects
+        this.effectTag = EFFECTTAGS.NoEffect;
+        this.nextEffect = null;
+        this.firstEffect = null;
+        this.lastEffet = null;
+
+        this.alternate = null;
     }
 }
 
