@@ -1,5 +1,7 @@
 import ReactRoot from './reactRoot.js';
-import { enqueueSetState } from './classComponentUpdater.js';
+import classComponentUpdater from './classComponentUpdater.js';
+import { FIBERTAGS } from './Constant.js';
+const enqueueSetState = classComponentUpdater.enqueueSetState;
 
 function render(reactElement, container) {
     // 根据container生成ReactRoot根节点
@@ -25,11 +27,11 @@ function commit(isInitial, reactRoot) {
     if (isInitial) {
         // 初次装载
         // 广度优先遍历Fiber tree
-        const rootFiber = reactRoot.root;
+        const rootFiber = reactRoot.rootFiber;
         let nextFiberNode = rootFiber.child;
-        let parentElement = rootFiber.stateNode;
+        let parentElement = rootFiber.stateNode.containerInfo;
         while (nextFiberNode) {
-            const domElement = nextFiberNode.stateNode;
+            const domElement = nextFiberNode.tag === FIBERTAGS.HostComponent ? nextFiberNode.stateNode : null;
             domElement && parentElement.appendChild(domElement);
             if (nextFiberNode.sibling) {
                 nextFiberNode = nextFiberNode.sibling;
