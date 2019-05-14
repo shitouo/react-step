@@ -24,6 +24,7 @@ class FiberNode {
         this.pendingProps = pendingProps;
         this.memorizedProps = null;
         this.memorizedState = null;
+        this.updateQueue = null;
 
         // effects
         this.effectTag = EFFECTTAGS.NoEffect;

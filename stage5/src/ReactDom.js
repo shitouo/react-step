@@ -42,7 +42,7 @@ function commit(isInitial, reactRoot) {
                 nextFiberNode = null;
             }
         }
-        document.body.appendChild(rootFiber.stateNode);
+        document.body.appendChild(rootFiber.stateNode.containerInfo);
     }
 }
 

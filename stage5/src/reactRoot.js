@@ -43,7 +43,11 @@ function reconcileChildren(current, workInProgress, nextChildren) {
     return newFiberNode;
 }
 
-function updateClassComponent(workInProgress) {
+function updateHostRoot(current, workInProgress) {
+    
+}
+
+function updateClassComponent(current, workInProgress) {
     // 解析classComponent就是要比较instance的props和states是否发生了变化，
     // 还需要调用render函数
     // 对比props、states是否发生了变化
@@ -60,7 +64,7 @@ function updateClassComponent(workInProgress) {
     return workInProgress.child;
 }
 
-function updateHostComponent(workInProgress) {
+function updateHostComponent(current, workInProgress) {
     // 解析hostComponent
     // 解析hostComponent，要比较hostComponent的props是否发生了变化。
     // 每次重新调用render，props都会是一个新的对象吧，比较props，应该是具体查看每个属性的属性值是否发生了变化吧？
@@ -342,36 +346,31 @@ class ReactRoot {
 
     // 生成Fiber tree
     render(reactElement) {
-        if (!reactElement) {
-            // 更新过程
-            let current = this.rootFiber.child;
-            let workInProgress = createWorkInProgress(current);
-            this.rootFiber.child = workInProgress;
-            workInProgress.return = this.rootFiber;
-            let currentWorkInProgress = workInProgress;
-            while (currentWorkInProgress) {
-                // 更新当前组件，并初步生成child节点
-                const currentWorkInProgressTag = currentWorkInProgress.tag;
-                let nextWorkInProgress = null;
-                if (currentWorkInProgressTag === FIBERTAGS.ClassComponent) {
-                    nextWorkInProgress = updateClassComponent(currentWorkInProgress);
-                } else if (currentWorkInProgressTag === FIBERTAGS.HostComponent) {
-                    nextWorkInProgress = updateHostComponent(currentWorkInProgress);
-                }
-                if (nextWorkInProgress) {
-                    currentWorkInProgress = nextWorkInProgress;
-                }
-                if (!nextWorkInProgress) {
-                    // 当前分支走到底，需要diff当前节点, 并寻找下一个节点
-                    currentWorkInProgress = completeUnitofWork(currentWorkInProgress);
-                }
+        let rootFiber = this.rootFiber;
+        rootFiber.payload = { element: reactElement };
+        let nextUnitOfWork = rootFiber;
+        // let workInProgress = createWorkInProgress(current);
+        // this.rootFiber.child = workInProgress;
+        // workInProgress.return = this.rootFiber;
+        // let currentWorkInProgress = workInProgress;
+        while (nextUnitOfWork) {
+            // 更新当前组件，并初步生成child节点
+            const workInProgressTag = nextUnitOfWork.tag;
+            const current = nextUnitOfWork.alternate;
+            if (workInProgressTag === FIBERTAGS.HostRoot) {
+                nextUnitOfWork = updateHostRoot(current, nextUnitOfWork);
+            } else if (workInProgressTag === FIBERTAGS.ClassComponent) {
+                nextUnitOfWork = updateClassComponent(current, nextUnitOfWork);
+            } else if (workInProgressTag === FIBERTAGS.HostComponent) {
+                nextUnitOfWork = updateHostComponent(current, nextUnitOfWork);
             }
-            // commit阶段
-            commitRoot(this.rootFiber);
-        } else {
-            // 初始装载
-            this.rootFiber.child = getChildFiber(reactElement, this.rootFiber);
+            if (!nextUnitOfWork) {
+                // 当前分支走到底，需要diff当前节点, 并寻找下一个节点
+                nextUnitOfWork = completeUnitofWork(nextUnitOfWork);
+            }
         }
+        // commit阶段
+        commitRoot(this.rootFiber);
     }
 }
 
