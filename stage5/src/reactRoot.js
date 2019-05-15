@@ -12,10 +12,11 @@ function reconcileChildren(current, workInProgress, nextChildren) {
     const childrenElementType = nextChildren.type;
     const childrenElementProps = nextChildren.props;
     const childrenElementKey = nextChildren.key;
-    const prevChildFiber = current.child;
     let newFiberNode = null;
-    if (prevChildFiber.elementType !== childrenElementType) {
-        // 如果type不一致，说明发生了重大的变化，则直接以nextChildren为准，生成新的fiber节点即可，不用再考虑current.child了。
+    if (!current || !current.child || current.child.elementType !== childrenElementType) {
+        // 如果没有current后者没有current.child，说明是新的节点
+        // 如果type不一致，说明发生了重大的变化，
+        // 都直接以nextChildren为准，生成新的fiber节点即可，不用再考虑current.child了。
         if (typeof childrenElementType === 'function') {
             // class组件或者函数组件
             // TODO 这里要区分函数组件还是类组件。现在统一按照类组件来处理，先不考虑函数组件
@@ -44,7 +45,9 @@ function reconcileChildren(current, workInProgress, nextChildren) {
 }
 
 function updateHostRoot(current, workInProgress) {
-    
+    // Noop
+    workInProgress.child = reconcileChildren(current, workInProgress);
+    return workInProgress.child;
 }
 
 function updateClassComponent(current, workInProgress) {
@@ -60,7 +63,7 @@ function updateClassComponent(current, workInProgress) {
         workInProgress.effectTag |= EFFECTTAGS.Update;
     }
     const nextChildren = instance.render();
-    workInProgress.child = reconcileChildren(workInProgress.alternate, workInProgress, nextChildren);
+    workInProgress.child = reconcileChildren(current, workInProgress, nextChildren);
     return workInProgress.child;
 }
 
@@ -73,7 +76,7 @@ function updateHostComponent(current, workInProgress) {
     // 此update其实不用做什么，主要是生成Fiber tree
     // 此时不做属性层面的diff，属性层面的diff到走到分支终点，返回时再做
     const nextChildren = newProps.children;
-    workInProgress.child = reconcileChildren(workInProgress.current, workInProgress, nextChildren);
+    workInProgress.child = reconcileChildren(current, workInProgress, nextChildren);
     return workInProgress.child;
 }
 
