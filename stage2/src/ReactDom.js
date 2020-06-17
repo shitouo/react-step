@@ -1,12 +1,13 @@
+import Constant from './Constant';
+
 function render(reactElement, container) {
     const reactElementType = reactElement.type;
-    if (typeof reactElementType === 'function') { // class或者function组件
+    if (typeof reactElementType === 'function' && reactElement.$$typeof === Constant.REACT_ELEMENT_TYPE) { // class或者function组件
         const Ctor = reactElementType;
         const instance = new Ctor();
         const children = instance.render();
         return render(children, container);
-    }
-    if (typeof reactElementType === 'string') {
+    } else if (typeof reactElementType === 'string') {
         const domElement = document.createElement(reactElementType);
         const elementprops = reactElement.props;
         const elementConfig = elementprops.config;
@@ -51,15 +52,23 @@ function render(reactElement, container) {
         }
 
         const children = elementprops.children;
-        if (typeof children === 'object') {
+        if (Array.isArray(children)) {
+            // 多个child
+            children.forEach(child => {
+                render(child, domElement);
+            });
+        } else if (typeof children === 'object') {
+            // HTML节点或者react对象
             render(children, domElement);
-        }
-        if (typeof children === 'string') {
+        } else if (typeof children === 'string') {
+            // 纯文本节点
             domElement.textContent = children;
             container.appendChild(domElement);
             return container;
         }
         container.appendChild(domElement);
+    } else {
+        throw new Error('请输入有效的组件');
     }
 }
 

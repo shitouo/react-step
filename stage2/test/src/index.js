@@ -10,10 +10,11 @@ class LikeButton extends React.Component {
     render() {
         const buttonStyle = {
             fontSize: '30px'
-        }
+        };
         return (
             <button style={ buttonStyle } className="red" onClick={() => console.log('buttopn') } hehe="1">
                 <span>Like</span>
+                <span>other line</span>
             </button>
         );
     }
