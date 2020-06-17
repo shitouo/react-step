@@ -61,7 +61,7 @@ class ReactRoot {
     // 生成Fiber tree
     render(reactElement) {
         function getChildFiber(currentElement, parentFiberNode) {
-            // 深度优先遍历，生成Fiber tree
+            // 深度优先遍历, 前序遍历, 生成Fiber tree
             const currentElementType = currentElement.type;
             const currentElementProps = currentElement.props;
             const currentElementKey = currentElement.key;

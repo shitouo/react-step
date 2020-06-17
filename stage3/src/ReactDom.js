@@ -1,10 +1,11 @@
 import ReactRoot from './reactRoot.js';
 
 function render(reactElement, container) {
-    // 根据container生成ReactRoot根节点
+    // 根据container生成ReactRoot。
+    // 注意 reactRoot并不是Fiber节点。它是整个应用的根。记录一些和DOM联系的信息
     const reactRoot = new ReactRoot(container);
 
-    // 根据reactElement递归生成Fiber tree，并插入到reactRoot中
+    // 根据reactElement递归生成Fiber tree
     reactRoot.render(reactElement);
     commit(true, reactRoot);
 }
@@ -29,7 +30,6 @@ function commit(isInitial, reactRoot) {
                 nextFiberNode = null;
             }
         }
-        document.body.appendChild(rootFiber.stateNode);
     }
 }
 

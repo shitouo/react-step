@@ -1,5 +1,5 @@
 /**
- * fiberNode类
+ * FiberNode类
  * 用来生产Fiber节点
  */
 class FiberNode {
