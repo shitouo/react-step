@@ -1,14 +1,13 @@
-import FiberNode from './FiberNode';
-import { EffectTags } from './Constant';
+import FiberNode from './FiberNode.js';
+import { EffectTags } from './Constant.js';
 
 export function createWorkInProgress(currentFiberNode, pendingProps) {
-    let newFiberNode = null;
-    const workInProgress = currentFiberNode.alternate;
+    let workInProgress = currentFiberNode.alternate;
     if (!workInProgress) {
-        newFiberNode = cloneFiberNode(currentFiberNode);
-        newFiberNode.pendingProps = pendingProps;
-        newFiberNode.alternate = currentFiberNode;
-        currentFiberNode.alternate = newFiberNode;
+        workInProgress = cloneFiberNode(currentFiberNode);
+        workInProgress.pendingProps = pendingProps;
+        workInProgress.alternate = currentFiberNode;
+        currentFiberNode.alternate = workInProgress;
     } else {
         // 当前节点的workInProgress已经被创建过，只需要更新动态属性即可
         workInProgress.pendingProps = pendingProps;
@@ -17,6 +16,7 @@ export function createWorkInProgress(currentFiberNode, pendingProps) {
         workInProgress.lastEffect = null;
         workInProgress.nextEffect = null;
     }
+    return workInProgress;
 }
 
 export function cloneFiberNode(fiberNode) {

@@ -1,5 +1,5 @@
 import React from '../../src/React.js';
-import ReactDOM from '../../src/ReactDOM.js';
+import ReactDOM from '../../src/ReactDom.js';
 
 class LikeButton extends React.Component {
     constructor(props) {

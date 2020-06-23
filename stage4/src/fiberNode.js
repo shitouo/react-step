@@ -2,7 +2,7 @@
  * fiberNode类
  * 用来生产Fiber节 点
  */
-import { EffectTags } from './Constant'
+import { EffectTags } from './Constant.js'
 class FiberNode {
     constructor(tag, pendingProps, key, type) {
         // instance

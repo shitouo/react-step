@@ -1,7 +1,7 @@
 import FiberNode from './FiberNode.js';
 import { FIBERTAGS } from './Constant.js';
 import Stack from './stack.js';
-import { createWorkInProgress } from './WorkInProgress';
+import { createWorkInProgress } from './WorkInProgress.js';
 
 // 全局变量
 window.CDMStack = new Stack();

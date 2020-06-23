@@ -1,8 +1,8 @@
 import ReactRoot from './reactRoot.js';
-import { createWorkInProgress, cloneFiberNode } from './WorkInProgress';
+import { createWorkInProgress, cloneFiberNode } from './WorkInProgress.js';
 import UpdateQueue from './UpdateQueue.js';
-import { FIBERTAGS, REACT_ELEMENT_TYPE, EffectTags } from "./Constant";
-import FiberNode from "./FiberNode";
+import { FIBERTAGS, REACT_ELEMENT_TYPE, EffectTags } from "./Constant.js";
+import FiberNode from "./FiberNode.js";
 
 window.workInProgressRoot = null;
 window.workInProgress = null;
@@ -31,10 +31,10 @@ function processUpdateQueue(updateQueue) {
 function beginWork(workInProgress) {
     // 查找当前节点是否发生了变化
     const current = workInProgress.alternate;
-    const memorizedProps = current.memorizedProps;
-    const memorizedState = current.memorizedState;
-    const newProps = workInProgress.pendingProps;
-    const newState = workInProgress.stateNode && workInProgress.stateNode.state;
+    // const memorizedProps = current.memorizedProps;
+    // const memorizedState = current.memorizedState;
+    // const newProps = workInProgress.pendingProps;
+    // const newState = workInProgress.stateNode && workInProgress.stateNode.state;
     const tag = workInProgress.tag;
     let nextUnitOfWork;
 
@@ -72,6 +72,39 @@ function updateHostComponent$1(workInProgress) {
     return updatePayload;
 }
 
+// 将子节点中的dom元素添加到当前dom元素中
+// 只找各子节点中第一层为HostComponent或者HostText的即可
+// 因为回溯的时候已经逐层都添加上去了
+function appendAllChildren(parentElement, workInProgress) {
+    let child = workInProgress.child;
+    while(child) {
+        const childTag = child && child.tag;
+        if (childTag === FIBERTAGS.HostComponent || childTag === FIBERTAGS.HostText) {
+            // html类元素，直接添加
+            parentElement.appendChild(child.stateNode);
+        } else if (childTag === FIBERTAGS.ClassComponent) {
+            // 非html类组件，往下找到最近的那层html类元素
+            child = child.child;
+            continue;
+        }
+        const sibling = child.sibling;
+        if (sibling) {
+            child = sibling;
+            continue;
+        }
+        if (child === workInProgress) {
+            // 回到了当前节点，添加完成
+            return;
+        }
+        while(child.sibling === null) {
+            child = child.return;
+            if (!child || child === workInProgress) {
+                return;
+            }
+        }
+    }
+}
+
 function completeWork(workInProgress) {
     // diff当前节点
     const tag = workInProgress.tag;
@@ -100,31 +133,16 @@ function completeWork(workInProgress) {
                 // 最后只要用最顶层那个首次创建dom的节点的Placement EffectTag，
                 // 就可以一次性的将所有新dom节点更新到dom上了。
                 workInProgress.stateNode = newElement;
-                let child = workInProgress.child;
-                while(child) {
-                    const childTag = child && child.tag;
-                    if (childTag === FIBERTAGS.HostComponent || childTag === FIBERTAGS.HostText) {
-                        // html类元素，直接添加
-                        newElement.appendChild(child.stateNode);
-                    } else if (childTag === FIBERTAGS.ClassComponent) {
-                        // 非html类组件，往下找到最近的那层html类元素
-                        child = child.child;
-                        continue;
+                appendAllChildren(newElement, workInProgress);
+                // 提前将dom属性装载到dom节点上，这样可以给commit阶段减轻工作量
+                const props = workInProgress.memorizedProps;
+                if (props) {
+                    const totalProps = {
+                        children: props.children,
+                        ...props.config,
                     }
-                    const sibling = child.sibling;
-                    if (sibling) {
-                        child = sibling;
-                        continue;
-                    }
-                    if (child === workInProgress) {
-                        // 回到了当前节点，添加完成
-                        return;
-                    }
-                    while(child.sibling === null) {
-                        child = child.return;
-                        if (!child || child === workInProgress) {
-                            return;
-                        }
+                    for(let key in totalProps) {
+                        updateDomProperties(newElement, key, totalProps[key]);
                     }
                 }
             }
@@ -141,6 +159,10 @@ function completeUnitofWork(workInProgress) {
     while (true) {
         let returnFiber = workInProgress.return;
         let siblingFiber = workInProgress.sibling;
+        if (!returnFiber) {
+            // 已经走到root节点
+            return null;
+        }
         // diff当前节点
         completeWork(workInProgress);
 
@@ -172,8 +194,6 @@ function completeUnitofWork(workInProgress) {
             workInProgress = returnFiber;
             continue;
         }
-        // 已经走到root节点
-        return null;
     }
 }
 
@@ -186,6 +206,8 @@ function updateHostComponent(workInProgress) {
         nextChildren = null;
     }
     workInProgress.child = reconcileChildren(workInProgress.current, workInProgress, nextChildren);
+    workInProgress.memorizedProps = nextProps;
+    workInProgress.pendingProps = null;
     return workInProgress.child;
 }
 
@@ -197,6 +219,7 @@ function updateClassComponent(workInProgress) {
     if (!current) {
         // 之前没有实例化过，所以需要实例化
         instance = new ctor();
+        workInProgress.stateNode = instance;
         const componentDidMount = instance.componentDidMount;
         if (typeof componentDidMount === 'function') {
             workInProgress.effectTag |= EffectTags.Update;
@@ -229,27 +252,46 @@ function createFiberNode(type, pendingProps, key) {
     let newFiberNode;
     if (typeof type === 'function') {
         // 函数或者class组件
-        newFiberNode = new FiberNode(FIBERTAGS.ClassComponent, pengdingProps, key, type);
-    } else if (typeof type === 'string' && nextChildren.$$type === REACT_ELEMENT_TYPE) {
+        newFiberNode = new FiberNode(FIBERTAGS.ClassComponent, pendingProps, key, type);
+    } else if (typeof type === 'string') {
         // hostComponent
-        newFiberNode = new FiberNode(FIBERTAGS.HostComponent, pengdingProps, key, type);
+        newFiberNode = new FiberNode(FIBERTAGS.HostComponent, pendingProps, key, type);
     }
     return newFiberNode;
 }
 
 function reconcileChildren(current, workInProgress, nextChildren) {
+    if (Array.isArray(nextChildren)) {
+        let prevNewFiberNode = null;
+        nextChildren.forEach((child, index) => {
+            let newFiberNode = reconcileSingleElement(current, workInProgress, child);
+            if (index === 0) {
+                workInProgress.child = newFiberNode;
+            } else {
+                prevNewFiberNode.sibling = newFiberNode;
+            }
+            prevNewFiberNode = newFiberNode;
+        })
+        return workInProgress.child;
+    } else {
+        return reconcileSingleElement(current, workInProgress, nextChildren);
+    }
+}
+
+function reconcileSingleElement(current, workInProgress, nextChildren) {
     if (!nextChildren) {
         return null;
     }
+    let newFiberNode = null;
     if (!current || !current.child) {
         // 如果没有current或者current.child，则说明是新添加的节点。直接按照nextChildren创建
         const type = nextChildren.type;
         const key = nextChildren.key;
         const pendingProps = nextChildren.props;
-        const newFiberNode = createFiberNode(type, pendingProps, key);
+        newFiberNode = createFiberNode(type, pendingProps, key);
         if (current && !current.child) {
             // current tree首先出现的null，需要将workInProgress的EffectTag标识为Placement
-            workInProgress.effectTag |= EffectTags.Placement;
+            newFiberNode.effectTag |= EffectTags.Placement;
         }
         newFiberNode.return = workInProgress;
     } else {
@@ -264,14 +306,15 @@ function reconcileChildren(current, workInProgress, nextChildren) {
                 workInProgress.lastEffect.next = current.child;
             }
             workInProgress.lastEffect = current.child;
-            const newFiberNode = createFiberNode(type, pendingProps, key);
+            newFiberNode = createFiberNode(type, pendingProps, key);
             newFiberNode.return = workInProgress;
         } else {
             // 没有大的变动，只是做了些属性更新
-            const newFiberNode = cloneFiberNode(current.child);
+            newFiberNode = cloneFiberNode(current.child);
             newFiberNode.return = workInProgress;
         }
     }
+    return newFiberNode;
 }
 
 function render(reactElement, container) {
@@ -295,56 +338,70 @@ function render(reactElement, container) {
 
 function commit() {
     // 将修改一次性提交到页面上
-    const rootFiber = window.workInProgressRoot;
+    const root = window.workInProgressRoot;
+    const currentrRootFiber = root.root;
+    const rootFiber = currentrRootFiber.alternate; // workInProgress tree上的root节点
     let nextEffect = rootFiber.firstEffect;
     const { Placement, Update, Deletion } = EffectTags;
     while (nextEffect) {
         const effectTag = nextEffect.effectTag;
         // 需要预先过滤掉EffectTag中不是下面这三种的部分，因为如果不过滤的话，下面的switch就不会生效了。
-        const primaryEffectTag = effectTag & (Placement | Update | Deletion);
-        switch (primaryEffectTag) {
-            case Placement: {
-                commitPlacement(nextEffect);
-                // 完成后去掉Placement effectTag
-                nextEffect.effectTag &= ~Placement;
-                break;
-            }
-            case Update: {
-                commitUpdate(nextEffect);
-                nextEffect.effectTag &= ~Update;
-                break;
-            }
-            case Deletion: {
-                commitDeletion();
-                nextEffect.effectTag &= ~Deletion;
-                break;
-            }
+        // const primaryEffectTag = effectTag & (Placement | Update | Deletion);
+        if (effectTag & Placement) {
+            commitPlacement(nextEffect);
+            nextEffect.effectTag &= ~Placement;
+        }
+        if (effectTag & Update) {
+            commitUpdate(nextEffect);
+            nextEffect.effectTag &= ~Update;
+        }
+        if (effectTag & Deletion) {
+            commitDeletion();
+            nextEffect.effectTag &= ~Deletion;
         }
         nextEffect = nextEffect.nextEffect;
     }
 
 }
 
+function getHostParentFiber(fiber) {
+    let parent = fiber.return;
+    while (parent) {
+        if (parent.tag === FIBERTAGS.HostComponent || parent.tag === FIBERTAGS.HostRoot) {
+            return parent;
+        }
+        parent = parent.return;
+    }
+    throw new Error('cannot find a host parent!');
+}
+
 function commitPlacement(finishedWork) {
     // 插入到页面的过程中，需要考虑父节点的类型，如果父节点是hostComponent，那么直接插入就好，如果父节点是classComponent，那么就要考虑父节点的父节点
+    // 插入子节点时，必须要找到各子节点的首层HostComponent或者HostText节点
     const parentFiber = getHostParentFiber(finishedWork);
     const parentDomNode = parentFiber.stateNode;
-    const finishedWorkDomNode = finishedWork.stateNode;
-    parentDomNode.appendChild(finishedWorkDomNode);
+    appendAllChildren(parentDomNode, finishedWork);
 }
 
 function commitUpdate(finishedWork) {
-    const updatePayload = finishedWork.updatePayload;
+    const updatePayload = finishedWork.updatePayload || [];
     const finishedWorkDomNode = finishedWork.stateNode;
 
-    for (let i = 0, length = updatePayload.length; i < length; i += 2) {
-        const propName = updatePayload[i];
-        const propValue = updatePayload[i + 1];
-
-        updateDomProperties(finishedWorkDomNode, propName, propValue);
+    if (finishedWork.tag === FIBERTAGS.HostComponent) {
+        for (let i = 0, length = updatePayload.length; i < length; i += 2) {
+            const propName = updatePayload[i];
+            const propValue = updatePayload[i + 1];
+    
+            updateDomProperties(finishedWorkDomNode, propName, propValue);
+        }
+    } else if (finishedWork.tag === FIBERTAGS.ClassComponent) {
+        // 有CDM生命周期时，也会标识Update的effectTag
+        const instance = finishedWork.stateNode;
+        instance.componentDidMount();
     }
 }
 
+// 将dom属性应用到dom节点上
 function updateDomProperties(domElement, propName, propValue) {
     const events = ['onClick', 'onChange'];
     const customStyles = {
@@ -377,6 +434,10 @@ function updateDomProperties(domElement, propName, propValue) {
             }
         }
         domElement.setAttribute('style', styleString);
+    }
+    // 判断props中有没有直接要添加的文本节点
+    if (propName === 'children' && typeof propValue === 'string') {
+        domElement.innerText = propValue;
     }
 }
 
