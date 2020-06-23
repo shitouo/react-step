@@ -19,6 +19,8 @@ module.exports = {
         smartui: false, // 智慧 UI 库
         uilib: false, // 自定义 UI 库
         smart: false, // 智慧引擎
+        workInProgress,
+        workInProgressRoot
     },
     rules: {
         'no-throw-literal': ['warn'],

@@ -1,9 +1,12 @@
-import FiberNode from './fiberNode.js';
+import FiberNode from './FiberNode.js';
 import { FIBERTAGS } from './Constant.js';
 import Stack from './stack.js';
+import { createWorkInProgress } from './WorkInProgress';
 
 // 全局变量
 window.CDMStack = new Stack();
+
+
 
 function createDomElement(elementType, elementProps) {
     const domElement = document.createElement(elementType);

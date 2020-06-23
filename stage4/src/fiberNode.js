@@ -1,7 +1,8 @@
 /**
  * fiberNode类
- * 用来生产Fiber节点
+ * 用来生产Fiber节 点
  */
+import { EffectTags } from './Constant'
 class FiberNode {
     constructor(tag, pendingProps, key, type) {
         // instance
@@ -10,6 +11,7 @@ class FiberNode {
         this.type = type; // reactElement对象的type
         this.elementType = null;
         this.stateNode = null;
+        this.alternate = null;
 
         // fiber
         this.return = null;
@@ -22,6 +24,10 @@ class FiberNode {
         this.pendingProps = pendingProps;
         this.memorizedProps = null;
         this.memorizedState = null;
+        this.effectTag = EffectTags.NoEffect;
+        this.firstEffect = null;
+        this.lastEffect = null;
+        this.nextEffect = null;
     }
 }
 
