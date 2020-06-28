@@ -4,7 +4,9 @@
 import { REACT_ELEMENT_TYPE } from './Constant.js';
 
 class Component {
-    // noop
+    setState(partialState, callback) {
+        this.updater && this.updater.enqueueSetState(this, partialState, callback);
+    }
 }
 
 const React = {

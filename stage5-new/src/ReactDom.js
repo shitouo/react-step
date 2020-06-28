@@ -1,17 +1,13 @@
 import ReactRoot from './reactRoot.js';
-import { createWorkInProgress, cloneFiberNode } from './WorkInProgress.js';
+import { createWorkInProgress } from './WorkInProgress.js';
 import UpdateQueue from './UpdateQueue.js';
 import { FIBERTAGS, REACT_ELEMENT_TYPE, EffectTags } from "./Constant.js";
 import FiberNode from "./FiberNode.js";
+import { createUpdate } from './util.js';
+import ClassComponentUpdater from './ClassComponentUpdater';
 
 window.workInProgressRoot = null;
 window.workInProgress = null;
-
-function createUpdate(payload) {
-    return {
-        payload,
-    }
-}
 
 function processUpdateQueue(updateQueue) {
     if (!updateQueue) {
@@ -29,7 +25,6 @@ function processUpdateQueue(updateQueue) {
 
 // 处理每一个workInProgress节点
 function beginWork(workInProgress) {
-    // 查找当前节点是否发生了变化
     const current = workInProgress.alternate;
     // const memorizedProps = current.memorizedProps;
     // const memorizedState = current.memorizedState;
@@ -127,7 +122,7 @@ function completeWork(workInProgress) {
                 // 在此时就要生成dom element
                 // 此时先不要处理属性，等到commit阶段，和更新一同处理
                 const newElement = document.createElement(workInProgress.type);
-                newElement.internalFiberNode = workInProgress;
+                newElement._reactInternalFiber = workInProgress;
                 newElement.internalProps = workInProgress.pendingProps;
                 // 对于首次创建dom的这些节点，需要把下一层appendAllChildren，这样
                 // 最后只要用最顶层那个首次创建dom的节点的Placement EffectTag，
@@ -220,6 +215,9 @@ function updateClassComponent(workInProgress) {
         // 之前没有实例化过，所以需要实例化
         instance = new ctor();
         workInProgress.stateNode = instance;
+        // 也要把fiber节点挂到instance上，方便setState时使用
+        instance._reactInternalFiber = workInProgress;
+        instance.updater = new ClassComponentUpdater();
         const componentDidMount = instance.componentDidMount;
         if (typeof componentDidMount === 'function') {
             workInProgress.effectTag |= EffectTags.Update;
@@ -310,11 +308,22 @@ function reconcileSingleElement(current, workInProgress, nextChildren) {
             newFiberNode.return = workInProgress;
         } else {
             // 没有大的变动，只是做了些属性更新
-            newFiberNode = cloneFiberNode(current.child);
+            newFiberNode = createWorkInProgress(current.child, pendingProps);
             newFiberNode.return = workInProgress;
         }
     }
     return newFiberNode;
+}
+
+function performUnitOfWork(workInProgress) {
+    // update阶段，可以被打断
+    while(workInProgress) {
+        workInProgress = beginWork(workInProgress);
+    }
+    // 提交阶段，不能被打断
+    // 将Fiber tree映射到页面上
+    // 此时的workInProgress就是rootFiber节点了。
+    commit();
 }
 
 function render(reactElement, container) {
@@ -326,14 +335,7 @@ function render(reactElement, container) {
     // root的workInProgress的updateQueue暂时写死
     workInProgress.updateQueue = new UpdateQueue();
     workInProgress.updateQueue.addUpdate(createUpdate(reactElement));
-    // update阶段，可以被打断
-    while(workInProgress) {
-        workInProgress = beginWork(workInProgress);
-    }
-    // 提交阶段，不能被打断
-    // 将Fiber tree映射到页面上
-    // 此时的workInProgress就是rootFiber节点了。
-    commit();
+    performUnitOfWork(workInProgress);
 }
 
 function commit() {
@@ -410,7 +412,15 @@ function updateDomProperties(domElement, propName, propValue) {
     };
 
     if (events.includes(propName)) {
-        domElement[propName.toLowerCase()] = propValue;
+        domElement[propName.toLowerCase()] = function(event) {
+            propValue();
+            // 执行完事件handler后，再开始执行fiber diff
+            if (window.syncQueue) {
+                const currentRootFiber = window.syncQueue[0];
+                workInProgress = createWorkInProgress(currentRootFiber, null);
+                performUnitOfWork(workInProgress);
+            }
+        };
     }
 
     // 判断props里面是否有className需要处理

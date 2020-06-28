@@ -4,8 +4,7 @@ import { EffectTags } from './Constant.js';
 export function createWorkInProgress(currentFiberNode, pendingProps) {
     let workInProgress = currentFiberNode.alternate;
     if (!workInProgress) {
-        workInProgress = cloneFiberNode(currentFiberNode);
-        workInProgress.pendingProps = pendingProps;
+        workInProgress = new FiberNode(currentFiberNode.tag, pendingProps, currentFiberNode.key, currentFiberNode.type);
         workInProgress.alternate = currentFiberNode;
         currentFiberNode.alternate = workInProgress;
     } else {
@@ -16,22 +15,16 @@ export function createWorkInProgress(currentFiberNode, pendingProps) {
         workInProgress.lastEffect = null;
         workInProgress.nextEffect = null;
     }
-    return workInProgress;
-}
-
-export function cloneFiberNode(fiberNode) {
-    const newFiberNode = new FiberNode(fiberNode.tag, fiberNode.pendingProps, fiberNode.key, fiberNode.type);
     newFiberNode.elementType = fiberNode.elementType;
     newFiberNode.stateNode = fiberNode.stateNode;
-
+    
     newFiberNode.return = fiberNode.return;
     newFiberNode.child = fiberNode.child;
     newFiberNode.sibling = fiberNode.sibling;
-
+    
     newFiberNode.index = fiberNode.index;
     newFiberNode.ref = fiberNode.ref;
     newFiberNode.memorizedProps = fiberNode.memorizedProps;
     newFiberNode.memorizedState = fiberNode.memorizedState;
-
-    return newFiberNode;
+    return workInProgress;
 }
