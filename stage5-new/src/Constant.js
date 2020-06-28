@@ -14,3 +14,8 @@ export const EffectTags = {
     Update: 4,
     Deletion: 8,
 };
+
+export const workTime = {
+    noWork: 0,
+    renderExpirationTime: 0,
+} 

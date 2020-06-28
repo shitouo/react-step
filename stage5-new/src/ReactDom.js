@@ -1,13 +1,14 @@
 import ReactRoot from './reactRoot.js';
 import { createWorkInProgress } from './WorkInProgress.js';
 import UpdateQueue from './UpdateQueue.js';
-import { FIBERTAGS, REACT_ELEMENT_TYPE, EffectTags } from "./Constant.js";
+import { FIBERTAGS, REACT_ELEMENT_TYPE, EffectTags, workTime } from "./Constant.js";
 import FiberNode from "./FiberNode.js";
 import { createUpdate } from './util.js';
 import ClassComponentUpdater from './ClassComponentUpdater';
 
 window.workInProgressRoot = null;
 window.workInProgress = null;
+window.didReceiveUpdate = false;
 
 function processUpdateQueue(updateQueue) {
     if (!updateQueue) {
@@ -30,19 +31,35 @@ function beginWork(workInProgress) {
     // const memorizedState = current.memorizedState;
     // const newProps = workInProgress.pendingProps;
     // const newState = workInProgress.stateNode && workInProgress.stateNode.state;
-    const tag = workInProgress.tag;
-    let nextUnitOfWork;
-
-    switch(tag) {
-        case FIBERTAGS.HostRoot:
-            nextUnitOfWork = updateHostRoot(workInProgress);
-            break;
-        case FIBERTAGS.ClassComponent:
-            nextUnitOfWork = updateClassComponent(workInProgress);
-            break;
-        case FIBERTAGS.HostComponent:
-            nextUnitOfWork = updateHostComponent(workInProgress);
-            break;
+    const updateExpirationTime = workInProgress.expirationTime;
+    if (updateExpirationTime < workTime.renderExpirationTime) {
+        didReceiveUpdate = false;
+        switch(tag) {
+            case FIBERTAGS.HostRoot:
+                nextUnitOfWork = updateHostRoot(workInProgress);
+                break;
+            case FIBERTAGS.ClassComponent:
+                nextUnitOfWork = updateClassComponent(workInProgress);
+                break;
+            case FIBERTAGS.HostComponent:
+                nextUnitOfWork = updateHostComponent(workInProgress);
+                break;
+        }
+    } else {
+        const tag = workInProgress.tag;
+        let nextUnitOfWork;
+    
+        switch(tag) {
+            case FIBERTAGS.HostRoot:
+                nextUnitOfWork = updateHostRoot(workInProgress);
+                break;
+            case FIBERTAGS.ClassComponent:
+                nextUnitOfWork = updateClassComponent(workInProgress);
+                break;
+            case FIBERTAGS.HostComponent:
+                nextUnitOfWork = updateHostComponent(workInProgress);
+                break;
+        }
     }
     if (!nextUnitOfWork) {
         // 当前分支已经走到了最后
