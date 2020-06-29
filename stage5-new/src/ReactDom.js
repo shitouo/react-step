@@ -29,25 +29,16 @@ function beginWork(workInProgress) {
     const current = workInProgress.alternate;
     // const memorizedProps = current.memorizedProps;
     // const memorizedState = current.memorizedState;
-    // const newProps = workInProgress.pendingProps;
+    const newProps = workInProgress.pendingProps;
     // const newState = workInProgress.stateNode && workInProgress.stateNode.state;
     const updateExpirationTime = workInProgress.expirationTime;
+    let nextUnitOfWork;
     if (updateExpirationTime < workTime.renderExpirationTime) {
+        // 没有更新操作
         didReceiveUpdate = false;
-        switch(tag) {
-            case FIBERTAGS.HostRoot:
-                nextUnitOfWork = updateHostRoot(workInProgress);
-                break;
-            case FIBERTAGS.ClassComponent:
-                nextUnitOfWork = updateClassComponent(workInProgress);
-                break;
-            case FIBERTAGS.HostComponent:
-                nextUnitOfWork = updateHostComponent(workInProgress);
-                break;
-        }
+        nextUnitOfWork = workInProgress.child = createWorkInProgress(workInProgress.child, newProps);
     } else {
         const tag = workInProgress.tag;
-        let nextUnitOfWork;
     
         switch(tag) {
             case FIBERTAGS.HostRoot:

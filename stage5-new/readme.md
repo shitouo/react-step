@@ -15,7 +15,7 @@
 实现方案：将业务组件定义的事件handler包装一层，执行完handler之后，再开始执行fiber diff。但是这里肯定不是每次执行了dom事件，都要执行fiber tree，只有事件的handler中调用了setState，才会在后续进行fiber diff。如果调用了setState，则
 实现思路：
 
-从root节点开始，按照current fiber tree开始构建workInProgress tree，对于过期时间小于同步时间的，直接clone就好，对于大于同步时间的，要调用其相应的update。
+从root节点开始，按照current fiber tree开始构建workInProgress tree，对于过期时间小于同步时间的，直接clone就好，对于大于同步时间的，要调用其相应的update。后面的流程就和初次构建时的一样了。
 
 #### 实施
 
