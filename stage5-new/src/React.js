@@ -26,7 +26,7 @@ const React = {
             $$typeof: REACT_ELEMENT_TYPE,
             key: config && config.key,
             ref: config && config.ref,
-            props: { config, children },
+            props: { ...config, children },
         };
     },
     Component: Component

@@ -4,7 +4,7 @@ import UpdateQueue from './UpdateQueue.js';
 import { FIBERTAGS, REACT_ELEMENT_TYPE, EffectTags, workTime } from "./Constant.js";
 import FiberNode from "./FiberNode.js";
 import { createUpdate } from './util.js';
-import ClassComponentUpdater from './ClassComponentUpdater';
+import ClassComponentUpdater from './ClassComponentUpdater.js';
 
 window.workInProgressRoot = null;
 window.workInProgress = null;
@@ -27,36 +27,40 @@ function processUpdateQueue(updateQueue) {
 // 处理每一个workInProgress节点
 function beginWork(workInProgress) {
     const current = workInProgress.alternate;
-    // const memorizedProps = current.memorizedProps;
     // const memorizedState = current.memorizedState;
     const newProps = workInProgress.pendingProps;
     // const newState = workInProgress.stateNode && workInProgress.stateNode.state;
     const updateExpirationTime = workInProgress.expirationTime;
     let nextUnitOfWork;
-    if (updateExpirationTime < workTime.renderExpirationTime) {
-        // 没有更新操作
-        didReceiveUpdate = false;
-        nextUnitOfWork = workInProgress.child = createWorkInProgress(workInProgress.child, newProps);
-    } else {
-        const tag = workInProgress.tag;
-    
-        switch(tag) {
-            case FIBERTAGS.HostRoot:
-                nextUnitOfWork = updateHostRoot(workInProgress);
-                break;
-            case FIBERTAGS.ClassComponent:
-                nextUnitOfWork = updateClassComponent(workInProgress);
-                break;
-            case FIBERTAGS.HostComponent:
-                nextUnitOfWork = updateHostComponent(workInProgress);
-                break;
+    if (current) {
+        const oldProps = current.memorizedProps;
+        if (oldProps !== newProps) {
+            didReceiveUpdate = true;
+        } else if (updateExpirationTime < workTime.sync) {
+            // 没有更新操作
+            // 直接clone原来节点就可以，不会走到update
+            didReceiveUpdate = false;
+            nextUnitOfWork = workInProgress.child = createWorkInProgress(workInProgress.child, newProps);
+            return nextUnitOfWork;
+        } else {
+            // 虽然当前节点没有变化，但是子节点发生了变化
+            // 一般引发fiber diff的classComponent节点会是这种情况。
+            didReceiveUpdate = false;
         }
     }
-    if (!nextUnitOfWork) {
-        // 当前分支已经走到了最后
-        // 提交update的结果
-        // 并寻找下一个需要update的节点
-        nextUnitOfWork = completeUnitofWork(workInProgress);
+    workInProgress.expirationTime = workTime.noWork;
+    const tag = workInProgress.tag;
+
+    switch(tag) {
+        case FIBERTAGS.HostRoot:
+            nextUnitOfWork = updateHostRoot(workInProgress);
+            break;
+        case FIBERTAGS.ClassComponent:
+            nextUnitOfWork = updateClassComponent(workInProgress);
+            break;
+        case FIBERTAGS.HostComponent:
+            nextUnitOfWork = updateHostComponent(workInProgress);
+            break;
     }
     return nextUnitOfWork;
 }
@@ -67,6 +71,10 @@ function updateHostComponent$1(workInProgress) {
     let updatePayload = [];
     for (let propItem in newProps) {
         if (Object.prototype.hasOwnProperty.call(newProps, propItem)) {
+            if (propItem === 'children' && typeof newProps[propItem] !== 'string' && typeof oldProps[propItem] !== 'string') {
+                // 对于children属性，只比较children直接是文本的
+                continue;
+            }
             if (newProps[propItem] !== oldProps[propItem]) {
                 updatePayload.push(propItem, newProps[propItem]);
             }
@@ -116,13 +124,13 @@ function completeWork(workInProgress) {
             break;
         }
         case FIBERTAGS.HostComponent: {
-            if (workInProgress.current) {
+            if (workInProgress.alternate) {
                 // 非首次创建
                 // 只diff属性，生成uploadPayload,
                 // 在commit阶段再进行实际的处理
                 const updatePayload = updateHostComponent$1(workInProgress);
-                if (updatePayload) {
-                    workInProgress.updateQueue = updatePayload;
+                if (updatePayload && updatePayload.length > 0) {
+                    workInProgress.updatePayload = updatePayload;
                     workInProgress.effectTag |= EffectTags.Update;
                 }
             } else {
@@ -138,17 +146,15 @@ function completeWork(workInProgress) {
                 workInProgress.stateNode = newElement;
                 appendAllChildren(newElement, workInProgress);
                 // 提前将dom属性装载到dom节点上，这样可以给commit阶段减轻工作量
-                const props = workInProgress.memorizedProps;
+                const props = workInProgress.pendingProps; // 注意这里要使用pendingProps
                 if (props) {
-                    const totalProps = {
-                        children: props.children,
-                        ...props.config,
-                    }
-                    for(let key in totalProps) {
-                        updateDomProperties(newElement, key, totalProps[key]);
+                    for(let key in props) {
+                        updateDomProperties(newElement, key, props[key]);
                     }
                 }
             }
+            workInProgress.memorizedProps = workInProgress.pendingProps;
+            workInProgress.pendingProps = null;
             break;
         }
         case FIBERTAGS.HostRoot: {
@@ -170,12 +176,14 @@ function completeUnitofWork(workInProgress) {
         completeWork(workInProgress);
 
         // 首先将自身身上挂着的effects传递到return上
-        if (!returnFiber.firstEffect) {
-            // 还未添加effect
-            returnFiber.firstEffect = workInProgress.firstEffect;
-        } else {
-            // return已经添加过effect
-            returnFiber.lastEffect.nextEffect = workInProgress.firstEffect;
+        if (workInProgress.firstEffect) {
+            if (!returnFiber.firstEffect) {
+                // 还未添加effect
+                returnFiber.firstEffect = workInProgress.firstEffect;
+            } else {
+                // return已经添加过effect
+                returnFiber.lastEffect.nextEffect = workInProgress.firstEffect;
+            }
             returnFiber.lastEffect = workInProgress.lastEffect;
         }
         // 如果自身也有effectTag，则还需要将自身挂到return上
@@ -208,9 +216,9 @@ function updateHostComponent(workInProgress) {
         // 这样可以少生成一些fiber 节点。
         nextChildren = null;
     }
-    workInProgress.child = reconcileChildren(workInProgress.current, workInProgress, nextChildren);
-    workInProgress.memorizedProps = nextProps;
-    workInProgress.pendingProps = null;
+    workInProgress.child = reconcileChildren(workInProgress.alternate, workInProgress, nextChildren);
+    // workInProgress.memorizedProps = nextProps;
+    // workInProgress.pendingProps = null;
     return workInProgress.child;
 }
 
@@ -219,7 +227,7 @@ function updateClassComponent(workInProgress) {
     const ctor = workInProgress.type;
     const getDerivedStateFromProps = ctor.getDerivedStateFromProps;
     let instance = workInProgress.stateNode;
-    if (!current) {
+    if (!instance) {
         // 之前没有实例化过，所以需要实例化
         instance = new ctor();
         workInProgress.stateNode = instance;
@@ -230,6 +238,13 @@ function updateClassComponent(workInProgress) {
         if (typeof componentDidMount === 'function') {
             workInProgress.effectTag |= EffectTags.Update;
         }
+    } else {
+        // 已经实例化过，处理updateQueue
+        const updateQueue = workInProgress.updateQueue;
+        const newState = processUpdateQueue(updateQueue);
+        workInProgress.updateQueue = null;
+        workInProgress.memorizedState = newState;
+        instance.state = newState;
     }
     // 执行getDerivedStateFromProps
     if (typeof getDerivedStateFromProps === 'function') {
@@ -249,6 +264,7 @@ function updateClassComponent(workInProgress) {
 function updateHostRoot(workInProgress) {
     const updateQueue = workInProgress.updateQueue;
     const newState = processUpdateQueue(updateQueue);
+    workInProgress.updateQueue = null;
     workInProgress.memorizedState = newState;
     workInProgress.child = reconcileChildren(workInProgress.alternate, workInProgress, newState);
     return workInProgress.child;
@@ -267,71 +283,85 @@ function createFiberNode(type, pendingProps, key) {
 }
 
 function reconcileChildren(current, workInProgress, nextChildren) {
+    let currentChild = current && current.child
     if (Array.isArray(nextChildren)) {
         let prevNewFiberNode = null;
         nextChildren.forEach((child, index) => {
-            let newFiberNode = reconcileSingleElement(current, workInProgress, child);
+            let newFiberNode = reconcileSingleElement(currentChild, current, workInProgress, child);
             if (index === 0) {
                 workInProgress.child = newFiberNode;
             } else {
                 prevNewFiberNode.sibling = newFiberNode;
             }
             prevNewFiberNode = newFiberNode;
+            currentChild = currentChild && currentChild.sibling;
         })
         return workInProgress.child;
     } else {
-        return reconcileSingleElement(current, workInProgress, nextChildren);
+        return reconcileSingleElement(currentChild, current, workInProgress, nextChildren);
     }
 }
 
-function reconcileSingleElement(current, workInProgress, nextChildren) {
+function reconcileSingleElement(currentChild, current, workInProgress, nextChildren) {
     if (!nextChildren) {
         return null;
     }
     let newFiberNode = null;
-    if (!current || !current.child) {
+    const type = nextChildren.type;
+    const key = nextChildren.key;
+    const pendingProps = nextChildren.props;
+    if (!currentChild) {
         // 如果没有current或者current.child，则说明是新添加的节点。直接按照nextChildren创建
-        const type = nextChildren.type;
-        const key = nextChildren.key;
-        const pendingProps = nextChildren.props;
         newFiberNode = createFiberNode(type, pendingProps, key);
-        if (current && !current.child) {
+        if (current) {
             // current tree首先出现的null，需要将workInProgress的EffectTag标识为Placement
             newFiberNode.effectTag |= EffectTags.Placement;
         }
         newFiberNode.return = workInProgress;
     } else {
         // current上存在child
-        if (current.child.type !== type || current.child.key !== key) {
+        if (currentChild.type !== type || currentChild.key !== key) {
             // type已经发生了变化
             // 或者key发生了变化
             // 都说明原来的child已经被卸载了
-            workInProgress.effectTag |= EffectTags.Deletion;
+            currentChild.effectTag |= EffectTags.Deletion;
+            // 这里要提前将这个旧节点放到return中，因为后面回溯的时候，回溯的是新生成的节点
             const lastEffect = workInProgress.lastEffect;
             if (lastEffect) {
-                workInProgress.lastEffect.next = current.child;
+                workInProgress.lastEffect.next = currentChild;
             }
-            workInProgress.lastEffect = current.child;
+            workInProgress.lastEffect = currentChild;
             newFiberNode = createFiberNode(type, pendingProps, key);
             newFiberNode.return = workInProgress;
         } else {
             // 没有大的变动，只是做了些属性更新
-            newFiberNode = createWorkInProgress(current.child, pendingProps);
+            newFiberNode = createWorkInProgress(currentChild, pendingProps);
             newFiberNode.return = workInProgress;
         }
     }
     return newFiberNode;
 }
 
-function performUnitOfWork(workInProgress) {
+function performSyncWorkOnRoot(workInProgress) {
     // update阶段，可以被打断
     while(workInProgress) {
-        workInProgress = beginWork(workInProgress);
+        workInProgress = performUnitOfWork(workInProgress);
     }
     // 提交阶段，不能被打断
     // 将Fiber tree映射到页面上
     // 此时的workInProgress就是rootFiber节点了。
     commit();
+}
+
+function performUnitOfWork(workInProgress) {
+    let nextUnitOfWork = beginWork(workInProgress);
+    if (!nextUnitOfWork) {
+        // 当前分支已经走到了最后
+        // 提交update的结果
+        // 并寻找下一个需要update的节点
+        nextUnitOfWork = completeUnitofWork(workInProgress);
+    }
+    return nextUnitOfWork;
 }
 
 function render(reactElement, container) {
@@ -343,7 +373,8 @@ function render(reactElement, container) {
     // root的workInProgress的updateQueue暂时写死
     workInProgress.updateQueue = new UpdateQueue();
     workInProgress.updateQueue.addUpdate(createUpdate(reactElement));
-    performUnitOfWork(workInProgress);
+    workInProgress.expirationTime = workTime.sync;
+    performSyncWorkOnRoot(workInProgress);
 }
 
 function commit() {
@@ -366,7 +397,7 @@ function commit() {
             nextEffect.effectTag &= ~Update;
         }
         if (effectTag & Deletion) {
-            commitDeletion();
+            commitDeletion(nextEffect);
             nextEffect.effectTag &= ~Deletion;
         }
         nextEffect = nextEffect.nextEffect;
@@ -422,11 +453,11 @@ function updateDomProperties(domElement, propName, propValue) {
     if (events.includes(propName)) {
         domElement[propName.toLowerCase()] = function(event) {
             propValue();
-            // 执行完事件handler后，再开始执行fiber diff
+            // 执行完事件handler后，如果需要fiber diff，开始执行fiber diff
             if (window.syncQueue) {
                 const currentRootFiber = window.syncQueue[0];
                 workInProgress = createWorkInProgress(currentRootFiber, null);
-                performUnitOfWork(workInProgress);
+                performSyncWorkOnRoot(workInProgress);
             }
         };
     }

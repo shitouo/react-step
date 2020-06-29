@@ -17,5 +17,5 @@ export const EffectTags = {
 
 export const workTime = {
     noWork: 0,
-    renderExpirationTime: 0,
+    sync: 1073741823,
 } 

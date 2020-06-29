@@ -8,7 +8,13 @@ class LikeButton extends React.Component {
     }
 
     componentDidMount() {
-        console.log(this.state);
+        console.log('LikeButton CDM');
+    }
+
+    onLikeButtonClick() {
+        this.setState({
+            liked: 'changed'
+        });
     }
 
     render() {
@@ -17,7 +23,7 @@ class LikeButton extends React.Component {
         };
         return React.createElement(
             'div',
-            { style: buttonStyle, className: 'red', onClick: () => console.log('buttopn'), hehe: '1' },
+            { style: buttonStyle, className: 'red', onClick: this.onLikeButtonClick.bind(this), hehe: '1' },
             React.createElement(
                 'span',
                 null,

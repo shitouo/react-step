@@ -28,6 +28,7 @@ class FiberNode {
         this.firstEffect = null;
         this.lastEffect = null;
         this.nextEffect = null;
+        this.expirationTime = 0;
     }
 }
 

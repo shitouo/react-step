@@ -8,7 +8,13 @@ class LikeButton extends React.Component {
     }
 
     componentDidMount() {
-        console.log(this.state);
+        console.log('LikeButton CDM');
+    }
+
+    onLikeButtonClick() {
+        this.setState({
+            liked: 'changed',
+        })
     }
 
     render() {
@@ -16,7 +22,7 @@ class LikeButton extends React.Component {
             fontSize: '30px'
         };
         return (
-            <div style={ buttonStyle } className="red" onClick={() => console.log('buttopn') } hehe="1">
+            <div style={ buttonStyle } className="red" onClick = {this.onLikeButtonClick.bind(this)} hehe="1">
                 <span>{this.state.liked + '1111'}</span>
                 <div>
                     <span>not like 1</span>
