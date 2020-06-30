@@ -38,9 +38,17 @@ function beginWork(workInProgress) {
             didReceiveUpdate = true;
         } else if (updateExpirationTime < workTime.sync) {
             // 没有更新操作
-            // 直接clone原来节点就可以，不会走到update
+            // 直接生成子节点
             didReceiveUpdate = false;
             nextUnitOfWork = workInProgress.child = createWorkInProgress(workInProgress.child, newProps);
+            nextUnitOfWork.return = workInProgress;
+            if (workInProgress.tag === FIBERTAGS.ClassComponent) { // 将组件实例对应的fiber节点变到workInProgress上来
+                // 这里react并没有这个操作，而是通过root的current属性来记录哪个tree是当下状态的
+                const instance = workInProgress.stateNode;
+                if (instance) {
+                    instance._reactInternalFiber = workInProgress
+                }
+            }
             return nextUnitOfWork;
         } else {
             // 虽然当前节点没有变化，但是子节点发生了变化
@@ -210,7 +218,7 @@ function completeUnitofWork(workInProgress) {
 
 function updateHostComponent(workInProgress) {
     const nextProps = workInProgress.pendingProps;
-    let nextChildren = nextProps.children;
+    let nextChildren = nextProps && nextProps.children;
     if (typeof nextChildren === 'string') {
         // 如果当前hostComponent只有一个字符串的child，那就不再这个文本节点创建fiber节点了
         // 这样可以少生成一些fiber 节点。
@@ -232,7 +240,6 @@ function updateClassComponent(workInProgress) {
         instance = new ctor();
         workInProgress.stateNode = instance;
         // 也要把fiber节点挂到instance上，方便setState时使用
-        instance._reactInternalFiber = workInProgress;
         instance.updater = new ClassComponentUpdater();
         const componentDidMount = instance.componentDidMount;
         if (typeof componentDidMount === 'function') {
@@ -246,6 +253,7 @@ function updateClassComponent(workInProgress) {
         workInProgress.memorizedState = newState;
         instance.state = newState;
     }
+    instance._reactInternalFiber = workInProgress;
     // 执行getDerivedStateFromProps
     if (typeof getDerivedStateFromProps === 'function') {
         const prevState = workInProgress.memorizedState;
@@ -369,7 +377,7 @@ function render(reactElement, container) {
     const reactRoot = new ReactRoot(container);
 
     workInProgressRoot = reactRoot;
-    workInProgress = createWorkInProgress(workInProgressRoot.root, null);
+    workInProgress = createWorkInProgress(workInProgressRoot.current, null);
     // root的workInProgress的updateQueue暂时写死
     workInProgress.updateQueue = new UpdateQueue();
     workInProgress.updateQueue.addUpdate(createUpdate(reactElement));
@@ -380,7 +388,7 @@ function render(reactElement, container) {
 function commit() {
     // 将修改一次性提交到页面上
     const root = window.workInProgressRoot;
-    const currentrRootFiber = root.root;
+    const currentrRootFiber = root.current;
     const rootFiber = currentrRootFiber.alternate; // workInProgress tree上的root节点
     let nextEffect = rootFiber.firstEffect;
     const { Placement, Update, Deletion } = EffectTags;
@@ -402,7 +410,8 @@ function commit() {
         }
         nextEffect = nextEffect.nextEffect;
     }
-
+    // 提交完所有的effect后，要更改workInProgressRoot的current
+    window.workInProgressRoot.current = rootFiber;
 }
 
 function getHostParentFiber(fiber) {
