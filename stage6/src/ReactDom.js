@@ -1,43 +1,85 @@
 import ReactRoot from './reactRoot.js';
 import { createWorkInProgress } from './WorkInProgress.js';
 import UpdateQueue from './UpdateQueue.js';
-import { FIBERTAGS, REACT_ELEMENT_TYPE, EffectTags, workTime } from "./Constant.js";
+import { FIBERTAGS, REACT_ELEMENT_TYPE, EffectTags, workTime, modeMap } from "./Constant.js";
 import FiberNode from "./FiberNode.js";
-import { createUpdate } from './util.js';
+import { createUpdate, expirationTimeToMs, requestCurrentTime } from './util.js';
 import ClassComponentUpdater from './ClassComponentUpdater.js';
 
-window.workInProgressRoot = null;
-window.workInProgress = null;
 window.didReceiveUpdate = false;
+window.isBatchingUpdates = false;
+window.firstCallbackNode = null;
+window.currentDidTimeout = false;
+window.activeFrameTime = 33;
+window.nextUnitOfWork = null;
+window.callbackExpirationTime = workTime.noWork; // 用来区分每次的异步，在一次异步中，如果有多次setState，则只会生成一个callbackNode
+window.nextRenderExpirationTime = workTime.noWork; // 当前reconcile任务的过期时间
+window.channel = new window.MessageChannel();
 
-function processUpdateQueue(updateQueue) {
+window.channel.port1.onmessage = function() {
+    // 每个帧内空闲时间实际的执行函数
+    // 首先判断当前时间是否已经超出了当前帧
+    const currentTime = performance.now();
+    let prevSchduledCallback = window.firstCallbackNode;
+    let didTimeout = false;
+    if (window.frameDeadline - currentTime <= 0) {
+        // 当前帧已经没有空闲时间
+        // 判断当前任务是否超时
+        const expirationTime = prevSchduledCallback.expirationTime;
+        const timeoutTime = expirationTimeToMs(expirationTime);
+        if (timeoutTime - currentTime <= 0) {
+            // 超时, 需要强制不打断执行
+            didTimeout = true;
+            window.currentDidTimeout = false;
+            // 一次性执行完所有的过期任务
+            while(true) {
+                flushFirstCallback(didTimeout);
+                if (expirationTimeToMs(window.firstCallbackNode.expirationTime) - performance.now() <= 0) {
+                    continue;
+                } else {
+                    break;
+                }    
+            }
+        }
+    } else {
+        // 当前帧还有空闲时间
+        flushFirstCallback(didTimeout);
+    }
+}
+
+function processUpdateQueue(updateQueue, renderExpirationtime) {
     if (!updateQueue) {
         return;
     }
     let newState = {};
     updateQueue.traverse(function(item) {
-        newState = {
-            ...newState,
-            ...item.payload,
+        if (item.expirationTime >= renderExpirationtime) {
+            newState = {
+                ...newState,
+                ...item.payload,
+            }
         }
     });
     return newState;
 }
 
 // 处理每一个workInProgress节点
-function beginWork(workInProgress) {
+function beginWork(workInProgress, renderExpirationtime) {
     const current = workInProgress.alternate;
     // const memorizedState = current.memorizedState;
     const newProps = workInProgress.pendingProps;
     // const newState = workInProgress.stateNode && workInProgress.stateNode.state;
     const updateExpirationTime = workInProgress.expirationTime;
     let nextUnitOfWork;
+    // 如果存在current，就要结合过期时间，来考虑当前节点是否需要更新
+    // 如果不存在current，则说明是新生成的节点，肯定是要进行更新的
     if (current) {
         const oldProps = current.memorizedProps;
         if (oldProps !== newProps) {
+            // 如果是父节点传过来的属性发生变化，则要进行更新
             didReceiveUpdate = true;
-        } else if (updateExpirationTime < workTime.sync) {
-            // 没有更新操作
+        } else if (updateExpirationTime < renderExpirationtime) {
+            // 当前节点的过期时间小于当前任务的过期时间，说明当前节点没有更新，或者更新并不属于这次的任务
             // 直接生成子节点
             didReceiveUpdate = false;
             nextUnitOfWork = workInProgress.child = createWorkInProgress(workInProgress.child, newProps);
@@ -50,21 +92,19 @@ function beginWork(workInProgress) {
                 }
             }
             return nextUnitOfWork;
-        } else {
-            // 虽然当前节点没有变化，但是子节点发生了变化
-            // 一般引发fiber diff的classComponent节点会是这种情况。
-            didReceiveUpdate = false;
         }
+    } else {
+        didReceiveUpdate = false;
     }
     workInProgress.expirationTime = workTime.noWork;
     const tag = workInProgress.tag;
 
     switch(tag) {
         case FIBERTAGS.HostRoot:
-            nextUnitOfWork = updateHostRoot(workInProgress);
+            nextUnitOfWork = updateHostRoot(workInProgress, renderExpirationtime);
             break;
         case FIBERTAGS.ClassComponent:
-            nextUnitOfWork = updateClassComponent(workInProgress);
+            nextUnitOfWork = updateClassComponent(workInProgress, renderExpirationtime);
             break;
         case FIBERTAGS.HostComponent:
             nextUnitOfWork = updateHostComponent(workInProgress);
@@ -230,7 +270,7 @@ function updateHostComponent(workInProgress) {
     return workInProgress.child;
 }
 
-function updateClassComponent(workInProgress) {
+function updateClassComponent(workInProgress, renderExpirationtime) {
     const current = workInProgress.alternate;
     const ctor = workInProgress.type;
     const getDerivedStateFromProps = ctor.getDerivedStateFromProps;
@@ -248,7 +288,7 @@ function updateClassComponent(workInProgress) {
     } else {
         // 已经实例化过，处理updateQueue
         const updateQueue = workInProgress.updateQueue;
-        const newState = processUpdateQueue(updateQueue);
+        const newState = processUpdateQueue(updateQueue, renderExpirationtime);
         workInProgress.updateQueue = null;
         workInProgress.memorizedState = newState;
         instance.state = newState;
@@ -269,9 +309,9 @@ function updateClassComponent(workInProgress) {
     return workInProgress.child;
 }
 
-function updateHostRoot(workInProgress) {
+function updateHostRoot(workInProgress, renderExpirationtime) {
     const updateQueue = workInProgress.updateQueue;
-    const newState = processUpdateQueue(updateQueue);
+    const newState = processUpdateQueue(updateQueue, renderExpirationtime);
     workInProgress.updateQueue = null;
     workInProgress.memorizedState = newState;
     workInProgress.child = reconcileChildren(workInProgress.alternate, workInProgress, newState);
@@ -350,19 +390,57 @@ function reconcileSingleElement(currentChild, current, workInProgress, nextChild
     return newFiberNode;
 }
 
-function performSyncWorkOnRoot(workInProgress) {
-    // update阶段，可以被打断
-    while(workInProgress) {
-        workInProgress = performUnitOfWork(workInProgress);
+function performAsyncWork(didTimeout) {
+    // 异步reconcile的入口
+    // 再计算一次任务是否超时
+    requestCurrentTime();
+    if (didTimeout || window.currentRendererTime > window.reactRoot.expirationTime) {
+        performWorkOnRoot(false);
+    } else {
+        performWorkOnRoot(true);
+    }
+}
+
+function performSyncWork() {
+    performWorkOnRoot(false)
+}
+
+function performWorkOnRoot(isAsync) {
+
+    // 先判断是不是新的任务
+    // 如果是新的任务，需要重置相关栈、重新从树顶开始
+    if (isAsync && (window.reactRoot.expirationTime !== window.nextRenderExpirationTime || !window.nextUnitOfWork)) {
+        window.nextUnitOfWork = createWorkInProgress(window.reactRoot.current, null);
+    }
+    window.nextRenderExpirationTime = window.reactRoot.expirationTime;
+    if (!isAsync) {
+        // 同步任务，不能被打断
+        while(nextUnitOfWork) {
+            nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+        }
+    } else {
+        while(nextUnitOfWork && window.frameDeadline >= performance.now()) {
+            nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+        }
+        if (nextUnitOfWork) {
+            // 一帧的时间已经用完，但是当前任务还没有执行完成
+            // 重新插入到链表中，进行排序
+            scheduleCallbackWithExpirationTime(window.nextRenderExpirationTime);
+            return;
+        }
     }
     // 提交阶段，不能被打断
     // 将Fiber tree映射到页面上
     // 此时的workInProgress就是rootFiber节点了。
-    commit();
+    try {
+        commit();
+    } finally {
+        window.reactRoot.expirationTime = workTime.noWork;
+    }
 }
 
 function performUnitOfWork(workInProgress) {
-    let nextUnitOfWork = beginWork(workInProgress);
+    let nextUnitOfWork = beginWork(workInProgress, window.nextRenderExpirationTime);
     if (!nextUnitOfWork) {
         // 当前分支已经走到了最后
         // 提交update的结果
@@ -372,22 +450,35 @@ function performUnitOfWork(workInProgress) {
     return nextUnitOfWork;
 }
 
-function render(reactElement, container) {
+function renderImp(reactElement, container) {
     // 根据container生成ReactRoot根节点
     const reactRoot = new ReactRoot(container);
-
-    workInProgressRoot = reactRoot;
-    workInProgress = createWorkInProgress(workInProgressRoot.current, null);
+    window.reactRoot = reactRoot;
+    
+    let workInProgress = createWorkInProgress(reactRoot.current, null);
     // root的workInProgress的updateQueue暂时写死
     workInProgress.updateQueue = new UpdateQueue();
-    workInProgress.updateQueue.addUpdate(createUpdate(reactElement));
-    workInProgress.expirationTime = workTime.sync;
-    performSyncWorkOnRoot(workInProgress);
+    workInProgress.updateQueue.addUpdate(createUpdate(reactElement, workTime.sync));
+    window.reactRoot.expirationTime = workInProgress.expirationTime = workTime.sync;
+    window.nextUnitOfWork = workInProgress;
+    performSyncWork();
+}
+
+function render(reactElement, container) {
+    window.mode = modeMap.NoContext;
+    window.nextRenderExpirationTime = workTime.sync;
+    renderImp(reactElement, container);
+}
+
+function concurrentRender(reactElement, container) {
+    window.mode = modeMap.ConcurrentMode;
+    window.nextRenderExpirationTime = workTime.sync;
+    renderImp(reactElement, container);
 }
 
 function commit() {
     // 将修改一次性提交到页面上
-    const root = window.workInProgressRoot;
+    const root = window.reactRoot;
     const currentrRootFiber = root.current;
     const rootFiber = currentrRootFiber.alternate; // workInProgress tree上的root节点
     let nextEffect = rootFiber.firstEffect;
@@ -410,8 +501,9 @@ function commit() {
         }
         nextEffect = nextEffect.nextEffect;
     }
+    rootFiber.firstEffect = rootFiber.lastEffect = null;
     // 提交完所有的effect后，要更改workInProgressRoot的current
-    window.workInProgressRoot.current = rootFiber;
+    window.reactRoot.current = rootFiber;
 }
 
 function getHostParentFiber(fiber) {
@@ -461,12 +553,18 @@ function updateDomProperties(domElement, propName, propValue) {
 
     if (events.includes(propName)) {
         domElement[propName.toLowerCase()] = function(event) {
+            // 事件函数执行前，初始化isBatchingUpdates
+            window.isBatchingUpdates = true;
+            window.isBatchingInteractiveUpdates = true;
             propValue();
+            // 事件函数执行完后，恢复isBatchingUpdates
+            window.isBatchingUpdates = false;
+            window.isBatchingInteractiveUpdates = false;
             // 执行完事件handler后，如果需要fiber diff，开始执行fiber diff
             if (window.syncQueue) {
                 const currentRootFiber = window.syncQueue[0];
-                workInProgress = createWorkInProgress(currentRootFiber, null);
-                performSyncWorkOnRoot(workInProgress);
+                nextUnitOfWork = createWorkInProgress(currentRootFiber, null);
+                performSyncWork();
             }
         };
     }
@@ -508,8 +606,95 @@ function commitDeletion(finishedWork) {
     parentDomNode.removeChild(finishedWorkDomNode);
 }
 
+function cancelCallback(callbackId) {
+    callbackId.next.previous = callbackId.previous;
+    callbackId.previous.next = callbackId.next;
+    callbackId = null;
+}
+
+export function scheduleCallbackWithExpirationTime(expirationTime) {
+    // 判断是否在一次的异步内
+    if(window.callbackExpirationTime !== workTime.noWork) {
+        // 说明这次异步中，已经加入了callbackNode
+        // 理论上来讲，同一异步的多个setState的过期时间应该是一样的
+        if (window.callbackExpirationTime > expirationTime) {
+            // 由于未知原因 ，当前setState的过期时间小于之前setState的时间，直接return
+            return;
+        } else {
+            // 取消之前的callbackNode
+            if (window.callbackId) {
+                cancelCallback(window.callbackId)
+            }
+        }
+    }
+    unstable_scheduleCallback(expirationTime);
+}
+
+export function unstable_scheduleCallback(expirationTime) {
+    let newCallbackNode = {
+        callback: performAsyncWork,
+        expirationTime,
+    }
+    window.callbackId = newCallbackNode;
+    // 对新插入的callbackNode进行排序
+    // 双向不循环链表
+    if (!window.firstCallbackNode) {
+        // 链表初始化
+        window.firstCallbackNode = newCallbackNode;
+    } else {
+        // 已经存在链表，需要按照过期时间，插入新的节点
+        // 从链表头开始
+        // 按照过期时间，从小到大排列
+        let firstCallbackNode = window.firstCallbackNode;
+        let node = firstCallbackNode;
+        while(true) {
+            if (node.expirationTime > expirationTime) {
+                newCallbackNode.next = node;
+                newCallbackNode.previous = node.previous;
+                if (node === firstCallbackNode) {
+                    window.firstCallbackNode = newCallbackNode;
+                } else {
+                    node.previous.next = newCallbackNode;
+                }
+                node.previous = newCallbackNode;
+                break;
+            }
+            next = node.next;
+            if (!next) {
+                // 已经到链表末尾
+                node.next = newCallbackNode;
+                newCallbackNode.previous = node;
+            }
+        }
+    }
+    // 将firstCallbackNode节点安排到下一帧的idle时间执行
+    ensureHostCallbackIsScheduled();
+}
+
+function ensureHostCallbackIsScheduled() {
+    // 安排firstCallbackNode进idle time
+    window.requestAnimationFrame(timeStamp => {
+        window.frameDeadline = timeStamp + window.activeFrameTime;
+        // 通过messageChannel，保证在帧内的idle时间执行
+        window.channel.port2.postMessage(undefined);
+    });
+}
+
+function flushFirstCallback(didTimeout) {
+    const flushedNode = window.firstCallbackNode;
+    window.firstCallbackNode = flushedNode.next;
+    if (window.firstCallbackNode) {
+        window.firstCallbackNode.previous = null;    
+    }
+    flushedNode.next = null;
+
+    const callback = flushedNode.callback;
+    callback(didTimeout);
+}
+
 let ReactDom = {
-    render: render
+    render,
+    concurrentRender,
 };
 
 export default ReactDom;

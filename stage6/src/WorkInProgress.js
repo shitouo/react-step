@@ -19,6 +19,7 @@ export function createWorkInProgress(currentFiberNode, pendingProps) {
     }
     workInProgress.elementType = currentFiberNode.elementType;
     workInProgress.stateNode = currentFiberNode.stateNode;
+    workInProgress.mode = currentFiberNode.mode;
     
     workInProgress.child = currentFiberNode.child;
     workInProgress.sibling = currentFiberNode.sibling;

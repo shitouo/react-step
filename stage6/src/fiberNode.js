@@ -2,7 +2,7 @@
  * fiberNode类
  * 用来生产Fiber节 点
  */
-import { EffectTags } from './Constant.js'
+import { EffectTags, modeMap, workTime } from './Constant.js'
 class FiberNode {
     constructor(tag, pendingProps, key, type) {
         // instance
@@ -29,6 +29,10 @@ class FiberNode {
         this.lastEffect = null;
         this.nextEffect = null;
         this.expirationTime = 0;
+        this.mode = window.mode;
+
+        this.expirationTime = workTime.noWork;
+        this.childExpirationTime = workTime.noWork;
     }
 }
 

@@ -12,9 +12,11 @@ class LikeButton extends React.Component {
     }
 
     onLikeButtonClick() {
-        this.setState({
-            liked: 'changed'
-        });
+        setTimeout(() => {
+            this.setState({
+                liked: 'hahahah'
+            });
+        }, 1000);
     }
 
     render() {
@@ -53,4 +55,4 @@ class LikeButton extends React.Component {
 }
 
 let domContainer = document.querySelector('#container');
-ReactDOM.render(React.createElement(LikeButton, null), domContainer);
+ReactDOM.concurrentRender(React.createElement(LikeButton, null), domContainer);

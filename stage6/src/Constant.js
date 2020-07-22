@@ -19,3 +19,8 @@ export const workTime = {
     noWork: 0,
     sync: 1073741823,
 } 
+
+export const modeMap = {
+    NoContext: 0,
+    ConcurrentMode: 1,
+}
