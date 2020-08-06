@@ -1,5 +1,5 @@
 import { requestCurrentTime, computeExpirationForFiber } from "./util.js";
-import { workTime, EffectTags } from "./Constant.js";
+import { workTime, EffectTags, HookEffectTags } from "./Constant.js";
 import { scheduleWork } from "./ClassComponentUpdater.js";
 
 window.firstWorkInProgressHook = null;
@@ -57,7 +57,7 @@ function basicStateReducer(state, action) {
     return typeof action === 'function' ? action(state) : action;
 }
 
-function updateReducer(reducer, initialArg) {
+function updateReducer(reducer, initialArg, init) {
     const hook = updateWorkInProgressHook();
     const queue = hook.queue;
     queue.lastRenderReducer = reducer;
@@ -103,7 +103,7 @@ function updateReducer(reducer, initialArg) {
                 }
             }
             if (!didSkip) {
-                newBaseUpdate = newState; // 最新的state
+                newBaseState = newState; // 最新的state
                 newBaseUpdate = prevUpdate; // 记录update链表中最后一个update
             }
             if (newState !== hook.memorizedState) {
@@ -111,7 +111,7 @@ function updateReducer(reducer, initialArg) {
             }
             hook.memorizedState = newState;
             hook.baseUpdate = newBaseUpdate;
-            hook.baseState = newBaseUpdate;
+            hook.baseState = newBaseState;
 
             queue.lastRenderState = newState
         }
@@ -120,6 +120,7 @@ function updateReducer(reducer, initialArg) {
     return [hook.memorizedState, dispatch];
 }
 
+// 将update存储到queue的last中。然后安排执行更新
 function dispatchAction(fiber, queue, action) {
     const alternate = fiber.alternate;
     if (fiber === window.currentlyRenderingFiber$1 || alternate !== null && alternate === window.currentlyRenderingFiber$1) {
@@ -207,11 +208,11 @@ function updateState(initialState) {
 }
 
 function mountEffect(create, deps) {
-    return mountEffectImpl(EffectTags.Update | EffectTags.Passive, EffectTags.UnmountPassive | EffectTags.MountPassive, create, deps)
+    return mountEffectImpl(EffectTags.Update | EffectTags.Passive, HookEffectTags.UnmountPassive | HookEffectTags.MountPassive, create, deps)
 }
 
 function updateEffect(create, deps) {
-    return updateEffectImpl(workTime.Update | workTime.Passive, workTime.UnmountPassive | workTime.MountPassive, create, deps);
+    return updateEffectImpl(EffectTags.Update | EffectTags.Passive, HookEffectTags.UnmountPassive | HookEffectTags.MountPassive, create, deps);
 }
 
 function createFunctionComponentUpdateQueue() {
@@ -249,7 +250,7 @@ function mountEffectImpl(fiberEffectTag, hookEffectTag, create, deps) {
     const hook = mountWorkInProgressHook();
     const nextDeps = deps === undefined ? null : deps;
     window.sideEffectTag |= fiberEffectTag;
-    hook.memorizedState = pushEffect(hookEffectTag, create, undefined, deps);
+    hook.memorizedState = pushEffect(hookEffectTag, create, undefined, nextDeps);
 }
 
 function updateEffectImpl(fiberEffectTag, hookEffectTag, create, deps) {
@@ -284,6 +285,58 @@ function areHookInputsEqual(nextDeps, prevDeps) {
     return true;
 }
 
+function mountMemo(nextCreate, deps) {
+    let hook = mountWorkInProgressHook();
+    let nextDeps = deps === undefined ? null : deps;
+    let nextValue = nextCreate();
+    hook.memorizedState = [nextValue, nextDeps];
+    return nextValue;
+}
+
+function updateMemo(nextCreate, deps) {
+    let hook = updateWorkInProgressHook();
+    let nextDeps = deps === undefined ? null : deps;
+    let prevState = hook.memorizedState;
+    if (prevState) {
+        const prevDeps = prevState[1];
+        if (nextDeps) {
+            if (areHookInputsEqual(nextDeps, prevDeps)) {
+                return prevState[0];
+            }
+        }
+    }
+    let nextValue = nextCreate();
+    hook.memorizedState = [nextValue, nextDeps];
+    return nextValue;
+}
+
+function mountReducer(reducer, initialArg, init) {
+    let hook = mountWorkInProgressHook();
+    let initialState;
+    if (typeof init === 'function') {
+        initialState = init(initialArg);
+    } else {
+        initialState = initialArg;
+    }
+    hook.memorizedState = hook.baseState = initialState;
+    let queue = hook.queue = {
+        last: null,
+        dispatch: null,
+        lastRenderReducer: reducer,
+        lastRenderState: initialState,
+    }
+    let dispatch = hook.dispatch = dispatchAction.bind(null, window.currentlyRenderingFiber$1, queue);
+    return [initialState, dispatch];
+}
+
+function mountLayoutEffect(create, deps) {
+    return mountEffectImpl(EffectTags.Update, HookEffectTags.UnmountMutation | HookEffectTags.MountLayout, create, deps);
+}
+
+function updateLayoutEffect(create, deps) {
+    return updateEffectImpl(EffectTags.Update, HookEffectTags.UnmountMutation | HookEffectTags.MountLayout, create, deps);
+}
+
 
 
 export const HooksDispatcherOnMount = {
@@ -292,6 +345,15 @@ export const HooksDispatcherOnMount = {
     },
     useEffect: function(create, deps) {
         return mountEffect(create, deps);
+    },
+    useLayoutEffect: function(create, deps) {
+        return mountLayoutEffect(create, deps);
+    },
+    useMemo: function(create, deps) {
+        return mountMemo(create, deps);
+    },
+    useReducer: function(reducer, initialArg, init) {
+        return mountReducer(reducer, initialArg, init)
     }
 }
 
@@ -301,5 +363,11 @@ export const HooksDispatcherOnUpdate = {
     },
     useEffect: function(create, deps) {
         return updateEffect(create, deps);
+    },
+    useMemo: function(create, deps) {
+        return updateMemo(create, deps);
+    },
+    useReducer: function(reducer, initialArg, init) {
+        return updateReducer()
     }
 }

@@ -55,6 +55,27 @@ const React = {
         }
         dispatcher.useEffect(create, deps);
     },
+    useLayoutEffect: function() {
+        const dispatcher = window.reactCurrentDispatcher.current;
+        if (!dispatcher) {
+            throw error('未找到dispatcher');
+        }
+        dispatcher.useLayoutEffect(create, deps);
+    },
+    useMemo: function(create, inputs) {
+        const dispatcher = window.reactCurrentDispatcher.current;
+        if (!dispatcher) {
+            throw error('未找到dispatcher');
+        }
+        dispatcher.useMemo(create, inputs);
+    },
+    useReducer: function(reducer, initialArg, init) {
+        const dispatcher = window.reactCurrentDispatcher.current;
+        if (!dispatcher) {
+            throw error('未找到dispatcher');
+        }
+        dispatcher.useReducer(reducer, initialArg, init);
+    },
     createContext: function(defaultValue, calculateChangeBits) {
         if (!calculateChangeBits) {
             calculateChangeBits = null;

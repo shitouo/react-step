@@ -1,7 +1,7 @@
 import ReactRoot from './reactRoot.js';
 import { createWorkInProgress } from './WorkInProgress.js';
 import UpdateQueue from './UpdateQueue.js';
-import { FIBERTAGS, REACT_ELEMENT_TYPE, EffectTags, workTime, modeMap, MaxSigned31BitInt, REACT_PROVIDER_TYPE, UpdateTags } from "./Constant.js";
+import { FIBERTAGS, REACT_ELEMENT_TYPE, EffectTags, workTime, modeMap, MaxSigned31BitInt, REACT_PROVIDER_TYPE, UpdateTags, HookEffectTags } from "./Constant.js";
 import FiberNode from "./FiberNode.js";
 import { createUpdate, expirationTimeToMs, requestCurrentTime } from './util.js';
 import ClassComponentUpdater from './ClassComponentUpdater.js';
@@ -755,6 +755,7 @@ function commit() {
     const rootFiber = currentrRootFiber.alternate; // workInProgress tree上的root节点
     let nextEffect = rootFiber.firstEffect;
     const { Placement, Update, Deletion } = EffectTags;
+    // commitAllHostEffects
     while (nextEffect) {
         const effectTag = nextEffect.effectTag;
         // 需要预先过滤掉EffectTag中不是下面这三种的部分，因为如果不过滤的话，下面的switch就不会生效了。
@@ -764,7 +765,7 @@ function commit() {
             nextEffect.effectTag &= ~Placement;
         }
         if (effectTag & Update) {
-            commitUpdate(nextEffect);
+            commitUpdateHostEffect(nextEffect);
             nextEffect.effectTag &= ~Update;
         }
         if (effectTag & Deletion) {
@@ -772,6 +773,15 @@ function commit() {
             nextEffect.effectTag &= ~Deletion;
         }
         nextEffect = nextEffect.nextEffect;
+    }
+    // commitAllLifeCycles
+    nextEffect = rootFiber.firstEffect;
+    while(nextEffect) {
+        const effectTag = nextEffect.effectTag;
+        if (effectTag & Update) {
+            commitUpdateLifeCycles(nextEffect);
+            nextEffect.effectTag &= ~Update;
+        }
     }
     rootFiber.firstEffect = rootFiber.lastEffect = null;
     // 提交完所有的effect后，要更改workInProgressRoot的current
@@ -797,7 +807,47 @@ function commitPlacement(finishedWork) {
     appendAllChildren(parentDomNode, finishedWork);
 }
 
-function commitUpdate(finishedWork) {
+function commitUpdateHostEffect(finishedWork) {
+    const updatePayload = finishedWork.updatePayload || [];
+    const finishedWorkDomNode = finishedWork.stateNode;
+
+    if (finishedWork.tag === FIBERTAGS.HostComponent) {
+        for (let i = 0, length = updatePayload.length; i < length; i += 2) {
+            const propName = updatePayload[i];
+            const propValue = updatePayload[i + 1];
+    
+            updateDomProperties(finishedWorkDomNode, propName, propValue);
+        }
+    } else if (finishedWork.tag === FIBERTAGS.FunctionComponent) {
+        // 函数组件，此时只处理layOutEffect
+        const updateQueue = finishedWork.updateQueue;
+        const lastEffect = updateQueue.lastEffect;
+        if (lastEffect) {
+            const firstEffect = lastEffect.next;
+            let effect = firstEffect;
+            while(true) {
+                if (effect.tag & HookEffectTags.UnmountMutation !== HookEffectTags.noWork) {
+                    // 卸载
+                    const destroy = effect.destroy;
+                    destroy && destroy();
+                    effect.destroy = null;
+                }
+                if (effect.tag & EffectTags.MountLayout !== EffectTags.noWork) {
+                    // 装载/更新
+                    const create = effect.create;
+                    effect.destroy = create();
+                }
+                if (effect.next !== firstEffect) {
+                    effect = effect.next;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+function commitUpdateLifeCycles(finishedWork) {
     const updatePayload = finishedWork.updatePayload || [];
     const finishedWorkDomNode = finishedWork.stateNode;
 

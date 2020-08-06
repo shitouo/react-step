@@ -20,11 +20,17 @@ export const EffectTags = {
     Placement: 2,
     Update: 4,
     Deletion: 8,
+    Passive: 512,
+};
+
+export const HookEffectTags = {
+    NoEffect: 0,
+    UnmountMutation: 4,
+    MountMutation: 8,
     UnmountLayout: 16,
     MountLayout: 32,
     MountPassive: 64,
     UnmountPassive: 128,
-    Passive: 512,
 };
 
 export const UpdateTags = {
